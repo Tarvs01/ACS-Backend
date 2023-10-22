@@ -1,0 +1,17 @@
+{
+  "name": "node-tutorial",
+  "version": "1.0.0",
+  "description": "Contains my learning files for node and express",
+  "main": "app.js",
+  "scripts": {
+    "start": "nodemon app.js"
+  },
+  "author": "Terver Torvenda",
+  "license": "ISC",
+  "dependencies": {
+    "bootstrap": "^5.2.3",
+    "lodash": "^4.17.21",
+    "mongodb": "^5.5.0",
+    "nodemon": "^2.0.21"
+  }
+}
