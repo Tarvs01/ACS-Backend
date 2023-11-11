@@ -1,14 +1,10 @@
 const express = require("express");
-const { readFileSync } = require("fs");
 const mysql = require("mysql");
-let html = readFileSync("./index.html", "utf8");
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 const year = 17;
-
-let users = [];
 
 let con = mysql.createConnection({
   host: "localhost",
@@ -23,20 +19,34 @@ con.connect(function (err) {
   }
 });
 
-app.get("/", (req, res) => {
-  res.send(html);
+app.post("/createtable", (req, res) => {
+  let sql1 = `CREATE TABLE students${req.body.year} ( MatricNumber VARCHAR(255) NOT NULL , library VARCHAR(255) NOT NULL DEFAULT 'default' , crc VARCHAR(255) NOT NULL DEFAULT 'default' , deptOfficer VARCHAR(255) NOT NULL DEFAULT 'default' , deptHod VARCHAR(255) NOT NULL DEFAULT 'default' , deptLab VARCHAR(255) NOT NULL DEFAULT 'default' , PRIMARY KEY (MatricNumber))`;
+
+  con.query(sql1, (error, result) => {
+    if (error) {
+      if (error.errno === 1050) {
+        res.send({ status: "FAILURE", message: "Table already exists" });
+      } else {
+        res
+          .status(500)
+          .send({ message: "There was an error creating the table" });
+      }
+    } else {
+      res.status(200).send({ message: "Table successfully created" });
+    }
+  });
 });
 
 app.post("/registerstaff", (req, res) => {
-  let sql = `INSERT INTO stafflogin (email, password, dept, defaulters) VALUES ("${req.body.email}", "${req.body.password}", "${req.body.dept}", "[]")`;
+  let sql = `INSERT INTO stafflogin (email, password, dept, defaulters) VALUES ("${req.body.email.toLowerCase()}", "${
+    req.body.password
+  }", "${req.body.dept}", "[]")`;
   let code = -1;
   let message = "";
   con.query(sql, function (err, result) {
-    console.log(result);
     if (err) {
       if (err.errno === Number(1062)) {
         code = 0;
-        console.log("error set");
       }
     }
 
@@ -48,28 +58,75 @@ app.post("/registerstaff", (req, res) => {
     }
     res.send({ code: code, msg: message });
   });
-
-  /* res.send(html); */
 });
 
 app.post("/registerstudentset", (req, res) => {
   let start = Number(req.body.start);
   let end = Number(req.body.end);
 
-  let code = -1;
-  let message = "";
+  if (!req.body.isExtraStudent) {
+    let checkTableExists = `SHOW TABLES LIKE "students${req.body.year}"`;
+    con.query(checkTableExists, (error, response) => {
+      if (error) {
+        res.status(500).send({ message: "There was an error" });
+      } else {
+        if (response.length === 0) {
+          res.send({ status: "FAILURE", message: "Table does not exist" });
+        } else {
+          for (let x = start; x <= end; x++) {
+            let sql = `INSERT INTO students${
+              req.body.year
+            } (MatricNumber) VALUES ("${req.body.dept.toLowerCase()}-${
+              req.body.year % 100
+            }-${x}")`;
 
-  for (let x = start; x <= end; x++) {
-    let sql = `INSERT INTO students20${req.body.year} (MatricNumber, library, crc, deptLab, deptOfficer, deptHod) VALUES ("${req.body.dept}-${req.body.year}-${x}", "default", "default", "default", "default", "default")`;
+            con.query(sql, function (err, result) {
+              if (err) {
+                res.status(500).send({
+                  message: "There was an error registering the students",
+                });
+              }
+              if (x === end) {
+                res.send({ message: "Students successfully registered" });
+              }
+            });
+          }
+        }
+      }
+    });
+  } else {
+    let checkTableExists = `SHOW TABLES LIKE "students${req.body.year - 1}"`;
+    con.query(checkTableExists, (error, response) => {
+      if (error) {
+        res.status(500).send({ message: "There was an error" });
+      } else {
+        if (response.length === 0) {
+          res.send({ status: "FAILURE", message: "Table does not exist" });
+        } else {
+          for (let x = start; x <= end; x++) {
+            let sql = `INSERT INTO students${
+              req.body.year - 1
+            } (MatricNumber) VALUES ("${req.body.dept}-${
+              req.body.year % 100
+            }-${x}")`;
 
-    con.query(sql, function (err, result) {
-      if (err) {
-        code = 0;
+            con.query(sql, function (err, result) {
+              if (err) {
+                res.status(500).send({
+                  message: "There was an error registering the students",
+                });
+              }
+              if (x === end) {
+                res.send({ message: "Students successfully registered" });
+              }
+            });
+          }
+        }
       }
     });
   }
 
-  console.log("last: ", code);
+  /*  console.log("last: ", code);
   if (code === 0) {
     message = "There was an error registering the students";
   } else {
@@ -77,35 +134,17 @@ app.post("/registerstudentset", (req, res) => {
     message = "Students successfully registered";
   }
 
-  res.send({ code: code, message: message });
-});
-
-app.post("/login", (req, res) => {
-  let sql = `SELECT password FROM testusers WHERE email="${req.body.email}"`;
-
-  con.query(sql, function (err, result) {
-    if (err) {
-      res.send({ status: "fail", msg: "There was an error. Try again" });
-    } else {
-      if (result.length === 0) {
-        res.send({ status: "fail", msg: "No account found. Sign up first" });
-      } else {
-        if (result[0].password !== req.body.password) {
-          res.send({ status: "fail", msg: "Incorrect passowrd" });
-        } else {
-          res.send({ status: "pass", msg: "Logged in" });
-        }
-      }
-    }
-  });
+  res.send({ code: code, message: message }); */
 });
 
 app.post("/loginstaff", (req, res) => {
-  let sql = `SELECT * FROM stafflogin WHERE email="${req.body.email}"`;
+  let sql = `SELECT * FROM stafflogin WHERE email="${req.body.email.toLowerCase()}"`;
 
   con.query(sql, (err, response) => {
     if (err) {
-      console.log(err);
+      res
+        .status(500)
+        .send({ message: "There was an error accessing the database" });
     } else {
       if (response[0] && response[0].password === req.body.password) {
         res.send({
@@ -119,17 +158,57 @@ app.post("/loginstaff", (req, res) => {
   });
 });
 
+app.post("/loginadmin", (req, res) => {
+  if (
+    req.body.email.toLowerCase() === "tarvs01@gmail.com" &&
+    req.body.password === "tarvagames18"
+  ) {
+    res.send({ status: "SUCCESS" });
+  } else {
+    res.send({ status: "FAILURE" });
+  }
+});
+
 app.post("/getsinglestudent", (req, res) => {
-  let sql = `SELECT * FROM students20${
+  let sql1 = `SELECT * FROM students20${
     req.body.matricNumber.split("-")[1]
   } WHERE MatricNumber="${req.body.matricNumber}"`;
 
-  con.query(sql, (err, response) => {
+  con.query(sql1, (err, response) => {
     if (err) {
-      console.log(err);
+      if (err.errno === 1146) {
+        res.send({ status: "FAILURE", data: [] });
+      } else {
+        res
+          .status(500)
+          .send({ message: "There was an error accessing the database" });
+      }
     } else {
-      console.log(response);
-      res.send(response);
+      if (response.length === 0) {
+        let sql2 = `SELECT * FROM students20${
+          Number(req.body.matricNumber.split("-")[1]) - 1
+        } WHERE MatricNumber="${req.body.matricNumber}"`;
+
+        con.query(sql2, (err, response) => {
+          if (err) {
+            if (err.errno === 1146) {
+              res.send({ status: "FAILURE", data: [] });
+            } else {
+              res
+                .status(500)
+                .send({ message: "There was an error accessing the database" });
+            }
+          } else {
+            if (response.length === 0) {
+              res.send({ status: "FAILURE", data: [] });
+            } else {
+              res.send({ status: "SUCCESS", data: response });
+            }
+          }
+        });
+      } else {
+        res.send({ status: "SUCCESS", data: response });
+      }
     }
   });
 });
@@ -293,30 +372,39 @@ app.put("/approveall/:dept", (req, res) => {
   }
 });
 
-app.post("/changepassword", (req, res) => {
-  let sql = `UPDATE testusers SET password='${req.body.password}' WHERE email="${req.body.email}"`;
+app.put("/approveone", (req, res) => {
+  if (req.body.dept.startsWith("dept")) {
+    let sql = `UPDATE students20${
+      req.body.matricNumber.split("-")[1]
+    } SET ${req.body.dept.slice(
+      0,
+      req.body.dept.length - 3
+    )}="approved" WHERE MatricNumber="${req.body.matricNumber}"`;
 
-  con.query(sql, function (err, result) {
-    console.log(result);
-    if (err) {
-      res.send({ status: "fail", msg: "There was an error. Try again" });
-    } else {
-      res.send({ status: "pass", msg: "Password successfully changed" });
-    }
-  });
-});
+    con.query(sql, (error, response) => {
+      if (error) {
+        res
+          .status(500)
+          .send({ message: "There was an error accessing the database" });
+      } else {
+        res.status(200).send({ message: "Database successfully uploaded" });
+      }
+    });
+  } else {
+    let sql = `UPDATE students20${req.body.matricNumber.split("-")[1]} SET ${
+      req.body.dept
+    }="approved" WHERE MatricNumber="${req.body.matricNumber}"`;
 
-app.post("/deleteAccount", (req, res) => {
-  let sql = `DELETE FROM testusers WHERE email="${req.body.email}"`;
-
-  con.query(sql, function (err, result) {
-    console.log(result);
-    if (err) {
-      res.send({ status: "fail", msg: "There was an error. Try again" });
-    } else {
-      res.send({ status: "pass", msg: "Account successfully deleted" });
-    }
-  });
+    con.query(sql, (error, response) => {
+      if (error) {
+        res
+          .status(500)
+          .send({ message: "There was an error accessing the database" });
+      } else {
+        res.status(200).send({ message: "Database successfully uploaded" });
+      }
+    });
+  }
 });
 
 app.get("*", (req, res) => {
